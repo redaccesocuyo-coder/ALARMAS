@@ -455,30 +455,97 @@
     const stateArea  = document.getElementById('state-area');
     const searchInput= document.getElementById('search-input');
 
+    // ── Configuración de Conexión Directa ──
+    const ELASTIC_URL = "http://chancani.claro.amx:9200/availability_cops_alarms/_search";
+    const AUTH_HEADER = "Basic " + btoa("noc-user:noc-user");
+
+    const ENERGY_KWS = ["CORTE", "ENERGIA", "BATERIA", "BAT", "FALTA DE FASE", "RECTIFICADOR", "AIRE", "TEMP", "EQUIPO"];
+    const TX_KWS     = ["RSSI", "ROE", "RX", "VSWR", "ANTENNA", "SIGNAL LEVEL", "OUT OF ORDER"];
+    const VANDAL_KWS = ["VANDAL", "PUERTA", "INTRU", "SABOT", "EXTRACTOR", "MOVIMIENTO", "SEGURIDAD"];
+
+    function clasificar(text) {
+        const t = text.toUpperCase();
+        if (VANDAL_KWS.some(k => t.includes(k))) return "VANDALISMO";
+        if (ENERGY_KWS.some(k => t.includes(k))) return "ENERGÍA";
+        if (TX_KWS.some(k => t.includes(k)))     return "TX";
+        return "OTRAS";
+    }
+
+    function parseISO(s) {
+        if (!s) return null;
+        // Ajuste UTC -> ART (-3hs)
+        const date = new Date(s);
+        date.setHours(date.getHours() - 3);
+        return date;
+    }
+
     // ── Fetch ──
     async function fetchAlarmas() {
-        // ... (resto del fetch igual)
-        stateArea.innerHTML = '<div class="spinner"></div><p>Actualizando datos...</p>';
+        stateArea.innerHTML = '<div class="spinner"></div><p>Conectando directamente con Datawarehouse...</p>';
         stateArea.style.display = 'block';
         tbody.innerHTML = '';
 
+        const query = {
+            "size": 500,
+            "sort": [{"alarm.nbiAlarmTime": {"order": "desc"}}],
+            "query": {
+                "bool": {
+                    "filter": [
+                        {"bool": {"minimum_should_match": 1, "should": [
+                            {"match_phrase": {"general.mr": "COMERCIAL"}},
+                            {"match_phrase": {"general.mr": "SIN ACEPTACION"}}
+                        ]}},
+                        {"match_phrase": {"location.region": "AR_MENDOZA"}}
+                    ]
+                }
+            }
+        };
+
         try {
-            const resp = await fetch('/api/alarmas');
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const data = await resp.json();
-            if (data.error) throw new Error(data.error);
+            const resp = await fetch(ELASTIC_URL, {
+                method: 'POST',
+                headers: {
+                    'Authorization': AUTH_HEADER,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(query)
+            });
 
-            allAlarms = data.alarmas;
+            if (!resp.ok) throw new Error(`Error de red: ${resp.status}`);
+            const json = await resp.json();
+            const hits = json.hits.hits;
 
-            document.getElementById('badge-total').textContent = `${data.total} activas`;
-            document.getElementById('badge-ts').textContent    = `Act: ${data.timestamp}`;
+            allAlarms = hits.map(h => {
+                const src = h._source;
+                const text = src.alarm.nbiAdditionalText || '';
+                const time_gen = src.alarm.nbiAlarmTime || '';
+                const time_ins = src.alarm.copsInsertedDate || '';
+                
+                const dt_gen = parseISO(time_gen);
+                const dt_ins = parseISO(time_ins);
+                const lat_sec = (dt_gen && dt_ins) ? (dt_ins - dt_gen) / 1000 : 0;
+
+                return {
+                    site:     src.location.name,
+                    cat:      clasificar(text),
+                    severity: String(src.alarm.nbiPerceivedSeverity || ''),
+                    hora:     dt_gen ? dt_gen.toLocaleString('es-AR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '—',
+                    raw_time: time_gen,
+                    lat_sec:  lat_sec,
+                    desc:     text.split('|')[0].trim()
+                };
+            });
+
+            document.getElementById('badge-total').textContent = `${allAlarms.length} activas`;
+            document.getElementById('badge-ts').textContent    = `Act: ${new Date().toLocaleTimeString()}`;
 
             updateStats();
             renderTable();
             startRefreshBar();
 
         } catch (e) {
-            stateArea.innerHTML = `<div class="icon">❌</div><p>Error: ${e.message}<br><small>¿Estás conectado a la red de Claro?</small></p>`;
+            console.error(e);
+            stateArea.innerHTML = `<div class="icon">❌</div><p>Error de conexión:<br>${e.message}<br><small>Verifica si tienes acceso a la red de Claro (VPN/WiFi) y si el navegador permite peticiones HTTP.</small></p>`;
         }
     }
 
