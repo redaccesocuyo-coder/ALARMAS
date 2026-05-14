@@ -1,0 +1,17 @@
+{
+  "name": "Alarmas RT Claro",
+  "short_name": "AlarmasRT",
+  "description": "Monitor de Alarmas Real-Time Mendoza",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d1117",
+  "theme_color": "#ff6b6b",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/564/564619.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

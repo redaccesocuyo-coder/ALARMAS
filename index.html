@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor de Alarmas RT — Claro Mendoza</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#ff6b6b">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/564/564619.png">
+    <style>
+        :root {
+            --bg-dark:    #0d1117;
+            --bg-card:    #161b22;
+            --bg-header:  #1c2128;
+            --border:     #30363d;
+            --accent:     #58a6ff;
+            --text:       #e6edf3;
+            --text-dim:   #8b949e;
+            --red:        #ff6b6b;
+            --yellow:     #f0c43f;
+            --orange:     #e67e22;
+            --green:      #3fb950;
+            --purple:     #c678dd;
+            --blue:       #4f8ef7;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* ── TOP BAR ── */
+        .topbar {
+            background: linear-gradient(135deg, #3d0f0f 0%, #1a0a0a 100%);
+            border-bottom: 1px solid #5a1a1a;
+            padding: 14px 30px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        .topbar-left { display: flex; align-items: center; gap: 14px; }
+        .topbar-logo { font-size: 22px; font-weight: 800; color: var(--red); letter-spacing: -0.5px; }
+        .topbar-sub  { font-size: 13px; color: var(--text-dim); }
+
+        .topbar-right { display: flex; align-items: center; gap: 16px; }
+
+        .badge-count {
+            background: var(--red);
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 20px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: 0.7; }
+        }
+
+        .timestamp {
+            font-size: 11px;
+            color: var(--text-dim);
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            padding: 4px 12px;
+            border-radius: 20px;
+        }
+
+        /* ── CONTROLS ── */
+        .controls {
+            padding: 18px 30px;
+            background: var(--bg-header);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .search-wrap {
+            flex: 1;
+            min-width: 200px;
+            position: relative;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-dim);
+            font-size: 16px;
+        }
+
+        .search-input {
+            width: 100%;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 16px 10px 40px;
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .search-input:focus { border-color: var(--accent); }
+        .search-input::placeholder { color: var(--text-dim); }
+
+        .filter-btns { display: flex; gap: 8px; }
+
+        .filter-btn {
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 14px;
+            color: var(--text-dim);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .filter-btn:hover, .filter-btn.active {
+            border-color: transparent;
+            color: white;
+        }
+
+        .filter-btn[data-cat="TODOS"].active   { background: #2d3748; color: white; }
+        .filter-btn[data-cat="ENERGÍA"].active  { background: #7a1a1a; border-color: var(--red); color: var(--red); }
+        .filter-btn[data-cat="TX"].active        { background: #1a3a7a; border-color: var(--blue); color: var(--blue); }
+        .filter-btn[data-cat="VANDALISMO"].active{ background: #4a1a6a; border-color: var(--purple); color: var(--purple); }
+        .filter-btn[data-cat="OTRAS"].active     { background: #2d3748; border-color: #58a6ff; color: #58a6ff; }
+
+        .refresh-btn {
+            background: var(--bg-dark);
+            border: 1px solid var(--green);
+            border-radius: 8px;
+            padding: 8px 16px;
+            color: var(--green);
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .refresh-btn:hover { background: var(--green); color: #0d1117; }
+
+        /* ── STATS PILLS ── */
+        .stats-bar {
+            display: flex;
+            gap: 12px;
+            padding: 14px 30px;
+            background: var(--bg-dark);
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+        }
+
+        .stat-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 8px 16px;
+        }
+
+        .stat-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .stat-num  { font-size: 18px; font-weight: 700; }
+        .stat-label{ font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+
+        /* ── TABLE ── */
+        .table-wrap { padding: 20px 30px; }
+
+        .alarm-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .alarm-table thead th {
+            background: var(--bg-header);
+            padding: 10px 14px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            user-select: none;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+            transition: color 0.2s;
+        }
+
+        .alarm-table thead th:hover { color: var(--text); }
+        .alarm-table thead th.sorted { color: var(--accent); }
+        .sort-arrow { margin-left: 4px; font-size: 10px; }
+
+        .alarm-table tbody tr {
+            border-bottom: 1px solid #1e2430;
+            transition: background 0.15s;
+        }
+
+        .alarm-table tbody tr:hover { background: #1a2030; }
+
+        .alarm-table tbody td {
+            padding: 10px 14px;
+            font-size: 13px;
+            vertical-align: middle;
+        }
+
+        /* Badges */
+        .cat-badge {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 5px;
+            white-space: nowrap;
+        }
+
+        .cat-ENERGÍA    { background: #3a1010; color: var(--red);    border: 1px solid #7a2020; }
+        .cat-TX          { background: #101a3a; color: var(--blue);   border: 1px solid #1a3a7a; }
+        .cat-VANDALISMO  { background: #2a103a; color: var(--purple); border: 1px solid #5a1a8a; }
+        .cat-OTRAS       { background: #1c2128; color: var(--text-dim); border: 1px solid var(--border); }
+
+        .sev-badge {
+            font-size: 9px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            display: block;
+            margin-top: 3px;
+            text-align: center;
+        }
+
+        .sev-1 { background: #3a1010; color: var(--red); }
+        .sev-2 { background: #3a2f00; color: var(--yellow); }
+        .sev-other { color: var(--text-dim); background: #1e2128; }
+
+        .site-code {
+            font-weight: 700;
+            color: var(--accent);
+            font-size: 13px;
+        }
+
+        .hora-cell { font-size: 12px; white-space: nowrap; }
+
+        .lat-badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 6px;
+            white-space: nowrap;
+        }
+
+        .lat-ok     { color: var(--text-dim); background: #1a1f2b; }
+        .lat-warn   { color: var(--yellow);    background: #2a2000; }
+        .lat-danger { color: var(--orange);    background: #2a1800; }
+
+        .desc-text { color: var(--text); max-width: 360px; }
+
+        .jump-btn {
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 5px 10px;
+            color: var(--text-dim);
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .jump-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+        /* ── EMPTY / LOADING ── */
+        .state-msg {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-dim);
+        }
+
+        .state-msg .icon { font-size: 40px; margin-bottom: 16px; }
+        .state-msg p     { font-size: 15px; }
+
+        .spinner {
+            width: 36px; height: 36px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Auto-refresh bar ── */
+        .refresh-bar {
+            height: 3px;
+            background: var(--green);
+            width: 100%;
+            transform-origin: left;
+            animation: shrink 60s linear forwards;
+        }
+
+        @keyframes shrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 768px) {
+            .topbar { padding: 10px 15px; flex-direction: column; gap: 8px; align-items: flex-start; }
+            .controls { padding: 12px 15px; }
+            .stats-bar { padding: 10px 15px; gap: 8px; }
+            .stat-pill { padding: 6px 10px; flex: 1 1 40%; }
+            .table-wrap { padding: 10px 5px; overflow-x: auto; }
+            .alarm-table { font-size: 11px; }
+            .desc-text { max-width: 150px; font-size: 11px; }
+            .search-wrap { width: 100%; }
+            .filter-btns { width: 100%; overflow-x: auto; padding-bottom: 5px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+    <div class="topbar-left">
+        <div class="topbar-logo">⚡ ALARMAS RT</div>
+        <div class="topbar-sub">Claro / AMX Argentina — Mendoza</div>
+    </div>
+    <div class="topbar-right">
+        <div class="badge-count" id="badge-total">— activas</div>
+        <div class="timestamp" id="badge-ts">Actualizando...</div>
+    </div>
+</div>
+
+<!-- PROGRESS BAR REFRESH -->
+<div id="refresh-bar-wrap" style="background:#1a2030; display:none;">
+    <div class="refresh-bar" id="refresh-bar"></div>
+</div>
+
+<!-- CONTROLS -->
+<div class="controls">
+    <div class="search-wrap">
+        <span class="search-icon">🔎</span>
+        <input type="text" class="search-input" id="search-input"
+               placeholder="Filtrar por sitio (ej: 386, ME00080), alarma o descripción...">
+    </div>
+    <div class="filter-btns">
+        <button class="filter-btn active" data-cat="TODOS">Todos</button>
+        <button class="filter-btn" data-cat="ENERGÍA">⚡ Energía</button>
+        <button class="filter-btn" data-cat="TX">📡 TX</button>
+        <button class="filter-btn" data-cat="VANDALISMO">🚨 Vandalismo</button>
+        <button class="filter-btn" data-cat="OTRAS">📦 Otras</button>
+    </div>
+    <button class="refresh-btn" id="btn-refresh">🔄 Refrescar</button>
+</div>
+
+<!-- STATS BAR -->
+<div class="stats-bar">
+    <div class="stat-pill">
+        <div class="stat-dot" style="background:#8b949e"></div>
+        <div>
+            <div class="stat-num" id="stat-total">—</div>
+            <div class="stat-label">Total</div>
+        </div>
+    </div>
+    <div class="stat-pill">
+        <div class="stat-dot" style="background:var(--red)"></div>
+        <div>
+            <div class="stat-num" id="stat-energia" style="color:var(--red)">—</div>
+            <div class="stat-label">Energía</div>
+        </div>
+    </div>
+    <div class="stat-pill">
+        <div class="stat-dot" style="background:var(--blue)"></div>
+        <div>
+            <div class="stat-num" id="stat-tx" style="color:var(--blue)">—</div>
+            <div class="stat-label">TX</div>
+        </div>
+    </div>
+    <div class="stat-pill">
+        <div class="stat-dot" style="background:var(--purple)"></div>
+        <div>
+            <div class="stat-num" id="stat-vandal" style="color:var(--purple)">—</div>
+            <div class="stat-label">Vandalismo</div>
+        </div>
+    </div>
+    <div class="stat-pill">
+        <div class="stat-dot" style="background:var(--text-dim)"></div>
+        <div>
+            <div class="stat-num" id="stat-otras" style="color:var(--text-dim)">—</div>
+            <div class="stat-label">Otras</div>
+        </div>
+    </div>
+</div>
+
+<!-- TABLE -->
+<div class="table-wrap">
+    <table class="alarm-table">
+        <thead>
+            <tr>
+                <th onclick="sortBy('cat')"     data-col="cat">TIPO <span class="sort-arrow">↕</span></th>
+                <th onclick="sortBy('site')"    data-col="site">SITIO <span class="sort-arrow">↕</span></th>
+                <th onclick="sortBy('raw_time')" data-col="raw_time">HORA <span class="sort-arrow">↕</span></th>
+                <th onclick="sortBy('lat_sec')" data-col="lat_sec">LATENCIA <span class="sort-arrow">↕</span></th>
+                <th>DESCRIPCIÓN</th>
+                <th style="width:60px"></th>
+            </tr>
+        </thead>
+        <tbody id="alarm-tbody"></tbody>
+    </table>
+
+    <div id="state-area" class="state-msg">
+        <div class="spinner"></div>
+        <p>Cargando alarmas...</p>
+    </div>
+</div>
+
+<script>
+    let allAlarms    = [];
+    let sortCol      = 'raw_time';
+    let sortDesc     = true;
+    let filterCat    = 'TODOS';
+    let refreshTimer = null;
+
+    const tbody      = document.getElementById('alarm-tbody');
+    const stateArea  = document.getElementById('state-area');
+    const searchInput= document.getElementById('search-input');
+
+    // ── Fetch ──
+    async function fetchAlarmas() {
+        // ... (resto del fetch igual)
+        stateArea.innerHTML = '<div class="spinner"></div><p>Actualizando datos...</p>';
+        stateArea.style.display = 'block';
+        tbody.innerHTML = '';
+
+        try {
+            const resp = await fetch('/api/alarmas');
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            if (data.error) throw new Error(data.error);
+
+            allAlarms = data.alarmas;
+
+            document.getElementById('badge-total').textContent = `${data.total} activas`;
+            document.getElementById('badge-ts').textContent    = `Act: ${data.timestamp}`;
+
+            updateStats();
+            renderTable();
+            startRefreshBar();
+
+        } catch (e) {
+            stateArea.innerHTML = `<div class="icon">❌</div><p>Error: ${e.message}<br><small>¿Estás conectado a la red de Claro?</small></p>`;
+        }
+    }
+
+    // ── Stats ──
+    function updateStats() {
+        const visible = getFiltered();
+        document.getElementById('stat-total').textContent   = visible.length;
+        document.getElementById('stat-energia').textContent = visible.filter(a => a.cat === 'ENERGÍA').length;
+        document.getElementById('stat-tx').textContent      = visible.filter(a => a.cat === 'TX').length;
+        document.getElementById('stat-vandal').textContent  = visible.filter(a => a.cat === 'VANDALISMO').length;
+        document.getElementById('stat-otras').textContent   = visible.filter(a => a.cat === 'OTRAS').length;
+    }
+
+    // ── Filter ──
+    function getFiltered() {
+        const q = searchInput.value.trim().toUpperCase();
+        return allAlarms.filter(a => {
+            if (filterCat !== 'TODOS' && a.cat !== filterCat) return false;
+            if (!q) return true;
+            // Búsqueda inteligente: "386" → "ME00386"
+            const siteNorm = a.site.replace('ME', '').replace(/^0+/, '');
+            return a.site.includes(q) || siteNorm === q.replace(/^0+/, '') ||
+                   a.desc.toUpperCase().includes(q) || a.hora.includes(q);
+        });
+    }
+
+    // ── Sort ──
+    function sortBy(col) {
+        if (sortCol === col) {
+            sortDesc = !sortDesc;
+        } else {
+            sortCol  = col;
+            sortDesc = true;
+        }
+
+        // Actualizar UI
+        document.querySelectorAll('.alarm-table th').forEach(th => {
+            th.classList.remove('sorted');
+            const arrow = th.querySelector('.sort-arrow');
+            if (arrow) arrow.textContent = '↕';
+        });
+
+        const th = document.querySelector(`.alarm-table th[data-col="${col}"]`);
+        if (th) {
+            th.classList.add('sorted');
+            th.querySelector('.sort-arrow').textContent = sortDesc ? '▼' : '▲';
+        }
+        
+        renderTable();
+    }
+
+    // ── Render ──
+    function renderTable() {
+        let rows = getFiltered();
+
+        rows.sort((a, b) => {
+            let va = a[sortCol], vb = b[sortCol];
+            
+            // Si es nulo o vacío, al final
+            if (va === undefined || va === null) return 1;
+            if (vb === undefined || vb === null) return -1;
+
+            // Ordenamiento Descendente (Más nuevo/grande arriba)
+            if (sortDesc) {
+                if (typeof va === 'string') return vb.localeCompare(va);
+                return vb - va;
+            } 
+            // Ordenamiento Ascendente (Más viejo/chico arriba)
+            else {
+                if (typeof va === 'string') return va.localeCompare(vb);
+                return va - vb;
+            }
+        });
+
+        tbody.innerHTML = '';
+        if (rows.length === 0) {
+            stateArea.innerHTML = '<div class="icon">🔍</div><p>No hay alarmas para este filtro.</p>';
+            stateArea.style.display = 'block';
+            updateStats();
+            return;
+        }
+        stateArea.style.display = 'none';
+
+        rows.forEach(a => {
+            const sevClass = a.severity === '1' ? 'sev-1' : (a.severity === '2' ? 'sev-2' : 'sev-other');
+            const sevText  = a.severity === '1' ? 'CRÍTICA' : (a.severity === '2' ? 'MAJOR' : 'MINOR');
+            const latClass = a.lat_sec > 3600 ? 'lat-danger' : (a.lat_sec > 120 ? 'lat-warn' : 'lat-ok');
+            const latText  = formatDuration(a.lat_sec);
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>
+                    <span class="cat-badge cat-${a.cat}">[${a.cat}]</span>
+                </td>
+                <td>
+                    <span class="site-code">${a.site}</span>
+                    <br><span class="sev-badge ${sevClass}">${sevText}</span>
+                </td>
+                <td class="hora-cell">${a.hora}</td>
+                <td><span class="lat-badge ${latClass}">${latText}</span></td>
+                <td class="desc-text">${a.desc}</td>
+                <td>
+                    <button class="jump-btn" onclick="filterSite('${a.site}')">🔎</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        updateStats();
+    }
+
+    function formatDuration(sec) {
+        if (sec < 60) return `${Math.floor(sec)}s`;
+        const min = Math.floor(sec / 60);
+        if (min < 60) return `${min}m ${Math.floor(sec % 60)}s`;
+        const h = Math.floor(min / 60);
+        if (h < 24) return `${h}h ${min % 60}m`;
+        return `${Math.floor(h / 24)}d ${h % 24}h`;
+    }
+
+    function filterSite(site) {
+        searchInput.value = site;
+        filterCat = 'TODOS';
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        document.querySelector('.filter-btn[data-cat="TODOS"]').classList.add('active');
+        renderTable();
+    }
+
+    // ── Refresh Bar ──
+    function startRefreshBar() {
+        const wrap = document.getElementById('refresh-bar-wrap');
+        const bar  = document.getElementById('refresh-bar');
+        wrap.style.display = 'block';
+        bar.style.animation = 'none';
+        bar.offsetHeight; // reflow
+        bar.style.animation = 'shrink 60s linear forwards';
+    }
+
+    // ── Event Listeners ──
+    searchInput.addEventListener('input', renderTable);
+
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            filterCat = btn.dataset.cat;
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderTable();
+        });
+    });
+
+    document.getElementById('btn-refresh').addEventListener('click', () => {
+        clearInterval(refreshTimer);
+        fetchAlarmas();
+        refreshTimer = setInterval(fetchAlarmas, 60000);
+    });
+
+    // ── Init ──
+    fetchAlarmas();
+    refreshTimer = setInterval(fetchAlarmas, 60000);
+
+    // ── Register PWA Service Worker ──
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+                .then(reg => console.log('PWA Sw Registered'))
+                .catch(err => console.log('PWA Sw Fail', err));
+        });
+    }
+</script>
+</body>
+</html>
